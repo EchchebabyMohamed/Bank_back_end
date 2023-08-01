@@ -1,6 +1,6 @@
 package com.example.bank_bachend.Service;
 
-import com.example.bank_bachend.DTOS.ClientDto;
+import com.example.bank_bachend.DTOS.*;
 import com.example.bank_bachend.Exeptions.ClientNontrouverExeption;
 import com.example.bank_bachend.Exeptions.CompteBancaireNotFoundException;
 import com.example.bank_bachend.Exeptions.SoldeNonSuffisantException;
@@ -12,9 +12,12 @@ import com.example.bank_bachend.reposetory.ClientReposetory;
 import com.example.bank_bachend.reposetory.OperationsReposetory;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.awt.print.Pageable;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -38,7 +41,7 @@ public class CompteBancaireServiceImpl implements CompteBancaireService{
     }
 
     @Override
-    public CompteCourant ajouterCompteBancaireCourant(double soldeInitial, double decouvert, Long idClient) throws ClientNontrouverExeption {
+    public CompteBancaireCourantDto ajouterCompteBancaireCourant(double soldeInitial, double decouvert, Long idClient) throws ClientNontrouverExeption {
         CompteCourant compteCourant = new CompteCourant();
         Client client = clientReposetory.findById(idClient).orElse(null);
         compteCourant.setId(UUID.randomUUID().toString());
@@ -51,11 +54,11 @@ public class CompteBancaireServiceImpl implements CompteBancaireService{
             throw new ClientNontrouverExeption("Client non trouver");
         }
         bnakReposetory.save(compteCourant);
-        return compteCourant;
+        return compteBancaireMapper.deCompteBancaireCourant(compteCourant);
     }
 
     @Override
-    public CompteSaving ajouterCompteBancaireSaving(double soldeInitial, double tauxDinteret, Long idClient) throws ClientNontrouverExeption {
+    public CompteBancaireSavingDto ajouterCompteBancaireSaving(double soldeInitial, double tauxDinteret, Long idClient) throws ClientNontrouverExeption {
         CompteSaving compteSaving = new CompteSaving();
         Client client = clientReposetory.findById(idClient).orElse(null);
         compteSaving.setId(UUID.randomUUID().toString());
@@ -68,7 +71,7 @@ public class CompteBancaireServiceImpl implements CompteBancaireService{
             throw new ClientNontrouverExeption("Client non trouver");
         }
         bnakReposetory.save(compteSaving);
-        return compteSaving;
+        return compteBancaireMapper.deCompteBancaireSaving(compteSaving);
     }
 
     @Override
@@ -79,14 +82,21 @@ public class CompteBancaireServiceImpl implements CompteBancaireService{
     }
 
     @Override
-    public CompteBancaire getCompte(String idCompte) throws CompteBancaireNotFoundException {
+    public CompteBancaireDto getCompte(String idCompte) throws CompteBancaireNotFoundException {
         CompteBancaire byId = bnakReposetory.findById(idCompte).orElseThrow(()->new CompteBancaireNotFoundException("compte bancaire non trouver"));
-        return byId;
+
+        if(byId instanceof CompteSaving){
+            CompteSaving compteSaving = (CompteSaving)byId;
+            return compteBancaireMapper.deCompteBancaireSaving(compteSaving);
+        }else {
+            CompteCourant compteCourant= (CompteCourant) byId;
+            return compteBancaireMapper.deCompteBancaireCourant(compteCourant);
+        }
     }
 
     @Override
     public void versement(String idCompte, double montant, String description) throws CompteBancaireNotFoundException {
-        CompteBancaire compte = getCompte(idCompte);
+        CompteBancaire compte = bnakReposetory.findById(idCompte).orElseThrow(()->new CompteBancaireNotFoundException("compte bancaire non trouver"));
         Operations operations = new Operations();
         operations.setDateOperation(new Date());
         operations.setType(TypeOperation.CRIDIT);
@@ -99,7 +109,7 @@ public class CompteBancaireServiceImpl implements CompteBancaireService{
 
     @Override
     public void retrait(String idCompte, double montant, String description) throws CompteBancaireNotFoundException, SoldeNonSuffisantException {
-        CompteBancaire compte = getCompte(idCompte);
+        CompteBancaire compte = bnakReposetory.findById(idCompte).orElseThrow(()->new CompteBancaireNotFoundException("compte bancaire non trouver"));
         if(compte.getSolde()<montant)
             throw  new SoldeNonSuffisantException("solde non suffisant");
         Operations operations = new Operations();
@@ -118,8 +128,16 @@ public class CompteBancaireServiceImpl implements CompteBancaireService{
         versement(idCompteDestination,montant,"Transfert de "+idCompteSource);
     }
     @Override
-    public List<CompteBancaire> getComptes(){
-        return bnakReposetory.findAll();
+    public List<CompteBancaireDto> getComptes(){
+        List<CompteBancaireDto> collect = bnakReposetory.findAll().stream().map(compteBancaire ->
+                {
+                    if (compteBancaire instanceof CompteCourant) {
+                        return compteBancaireMapper.deCompteBancaireCourant((CompteCourant) compteBancaire);
+                    } else
+                        return  compteBancaireMapper.deCompteBancaireSaving((CompteSaving) compteBancaire);
+                }
+        ).collect(Collectors.toList());
+        return collect;
     }
 
     @Override
@@ -141,4 +159,32 @@ public class CompteBancaireServiceImpl implements CompteBancaireService{
     public void supprimerClient(Long id){
         clientReposetory.deleteById(id);
     }
+
+    @Override
+    public List<OperationsDto> getOperations(String id){
+        List<Operations> operations = operationsReposetory.findByCompteBancaire_Id(id);
+        List<OperationsDto> operationsDto = operations.stream().map(operations1 -> {
+            return compteBancaireMapper.deOperations(operations1);
+        }).collect(Collectors.toList());
+        return operationsDto;
+    }
+
+    @Override
+    public CompteHestoriesDto getCompteHestory(String id, int page, int size) throws CompteBancaireNotFoundException {
+        CompteBancaire compteBancaire = bnakReposetory.findById(id).orElse(null);
+        if (compteBancaire == null) {
+            throw new CompteBancaireNotFoundException("Compte non trouver");
+        }
+        Page<Operations> byCompteBancaire = operationsReposetory.findByCompteBancaire_Id(id,PageRequest.of(page,size));
+        CompteHestoriesDto compteHestoriesDto= new CompteHestoriesDto();
+        List<OperationsDto> collect = byCompteBancaire.getContent().stream().map(operations -> compteBancaireMapper.deOperations(operations)).collect(Collectors.toList());
+        compteHestoriesDto.setOperationsDtos(collect);
+        compteHestoriesDto.setIdcompt(compteBancaire.getId());
+        compteHestoriesDto.setPage_(page);
+        compteHestoriesDto.setSizeDepage(size);
+        compteHestoriesDto.setTotalePages(byCompteBancaire.getTotalPages());
+        compteHestoriesDto.setSolde(compteBancaire.getSolde());
+        return compteHestoriesDto;
+    }
+
 }

@@ -1,6 +1,9 @@
 package com.example.bank_bachend;
 
 import com.example.bank_bachend.DTOS.ClientDto;
+import com.example.bank_bachend.DTOS.CompteBancaireCourantDto;
+import com.example.bank_bachend.DTOS.CompteBancaireDto;
+import com.example.bank_bachend.DTOS.CompteBancaireSavingDto;
 import com.example.bank_bachend.Exeptions.ClientNontrouverExeption;
 import com.example.bank_bachend.Exeptions.CompteBancaireNotFoundException;
 import com.example.bank_bachend.Exeptions.SoldeNonSuffisantException;
@@ -21,6 +24,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import java.rmi.server.UID;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -44,17 +48,20 @@ public class BankBachendApplication implements CommandLineRunner {
             try {
                 compteBancaireService.ajouterCompteBancaireCourant(Math.random()*90000,6000, cl.getId());
                 compteBancaireService.ajouterCompteBancaireSaving(Math.random()*5000,5.5, cl.getId());
-                compteBancaireService.getComptes().forEach(cmpt->{
+                List<CompteBancaireDto> compteBancaireDtos = compteBancaireService.getComptes();
+                for (CompteBancaireDto compte:compteBancaireDtos) {
                     for (int i = 0; i < 10; i++) {
-                        try {
-                            compteBancaireService.versement(cmpt.getId(),Math.random()*10000,"versement");
-                            compteBancaireService.retrait(cmpt.getId(),1000+Math.random(),"retrait");
-                        } catch (CompteBancaireNotFoundException | SoldeNonSuffisantException e) {
-                            throw new RuntimeException(e);
-                        }
+                        String idcompte;
+                        if (compte instanceof CompteBancaireSavingDto)
+                            idcompte = ((CompteBancaireSavingDto)compte).getId();
+                        else
+                            idcompte = ((CompteBancaireCourantDto)compte).getId();
+
+                        compteBancaireService.versement(idcompte,Math.random()*10000,"versement");
+
                     }
-                });
-            } catch (ClientNontrouverExeption e) {
+                }
+            } catch (ClientNontrouverExeption |CompteBancaireNotFoundException  e) {
                 throw new RuntimeException(e);
             }
         });
