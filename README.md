@@ -15,6 +15,16 @@ Ce projet implémente une API RESTful en utilisant Spring Boot pour la gestion d
 - Spring Data JPA pour l'accès aux données
 - Spring Web pour l'exposition de l'API
 - Base de données relationnelle (par exemple, MySQL, PostgreSQL, H2)
+  
+## Technologies Utilisées
+
+![Capture d'écran 2023-08-07 115844](https://github.com/EchchebabyMohamed/Bank_back_end/assets/126407198/f3b42a41-ed5a-4e82-9dd7-f80e46ad1918)
+
+- Java 8
+- Spring Boot
+- Spring Data JPA pour l'accès aux données
+- Spring Web pour l'exposition de l'API
+- Base de données relationnelle (par exemple, MySQL, PostgreSQL, H2)
 
 ## Prérequis
 
